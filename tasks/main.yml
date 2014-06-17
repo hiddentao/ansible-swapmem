@@ -1,0 +1,35 @@
+# Based on: https://www.digitalocean.com/community/tutorials/how-to-add-swap-on-ubuntu-14-04
+
+- name: Show Swap and RAM
+  debug: msg="ram={{ ansible_memtotal_mb }}, swap={{ ansible_swaptotal_mb }}"
+
+- name: Create swapfile
+  shell: "fallocate -l {{ 2 * ansible_memtotal_mb }}MB /swapfile"
+  when: "ansible_swaptotal_mb == 0"
+
+- name: Set swapfile perms
+  shell: "chmod 600 /swapfile"
+  when: "ansible_swaptotal_mb == 0"
+
+- name: Enable swapfile
+  shell: "mkswap /swapfile"
+  when: "ansible_swaptotal_mb == 0"
+
+- name: Make permanent
+  shell: "echo '/swapfile   none    swap    sw    0   0' >> /etc/fstab"
+  when: "ansible_swaptotal_mb == 0"
+
+- name: Reboot instance
+  command: /sbin/shutdown -r now
+  register: swapmem_reboot
+  when: "ansible_swaptotal_mb == 0"
+
+- name: Wait for instance to come online
+  local_action:
+    module: wait_for
+    host: "{{ ansible_ssh_host|default(inventory_hostname) }}"
+    port: 22
+    delay: 30
+    timeout: 600
+    state: started
+  when: "ansible_swaptotal_mb == 0 and swapmem_reboot|changed"
